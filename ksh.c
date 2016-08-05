@@ -36,6 +36,7 @@ void view_history(void);
 void del_history(void);
 void find_path(void);
 void help(void);
+void get_name(void);
 
 char U_name[10];
 char home_path[30];
@@ -50,28 +51,36 @@ int main(void)
     char *shuru;
     char anal[10][22];
     int i;
+	get_name();
+    find_path();
+    cd(home_path);
     while(1) {
 
         shuru = print_tishi();
-        save_history(shuru);
+		if(strlen(shuru)>0) {
+        	save_history(shuru);
+		}
         if(strcmp(shuru,"exit")==0) {
             free(shuru);
+			remove("/tmp/host_name");
             goodbye();
             break;
         } else if(strcmp(shuru,"history") == 0) {
             view_history();
             continue;
-        } else if(strcmp(shuru,"del history") == 0) {
+        } else if(strcmp(shuru,"clean") == 0) {
             del_history();
             continue;
         } else if(strcmp(shuru,"help") == 0) {
             help();
             continue;
-        }
+        } else if(strcmp(shuru,"") == 0) {
+			continue;
+		}
         anal_input(shuru,anal);
 //        for(i=0;i<10;i++) puts(anal[i]);
         if(strcmp(anal[0],"cd") == 0) {
-            if(strcmp(anal[1],"~") == 0) {
+            if((strcmp(anal[1],"~") == 0)||(anal[1][0]=='\0')) {
                 find_path();
                 strcpy(anal[1],home_path);
             }
@@ -85,11 +94,27 @@ int main(void)
     return 0;
 }
 
+void get_name(void)
+{
+	char name[10];
+	int fd1;
+	int i;
+	system("whoami > /tmp/host_name");
+    fd1= open("/tmp/host_name",O_RDONLY);
+    read(fd1,name,10);
+    close(fd1);
+    for(i=0;name[i]!='\n';i++) ;
+    name[i] = '\0';
+    strcpy(U_name,name);
+    remove("/tmp/host_name");
+}
 char *print_tishi(void)
 {
     char *line;
-    char re[40];
-    memset(re,40,0);
+    char re[256];
+	char re1[256];
+	memset(re1,256,0);
+    memset(re,256,0);
     char name[10];
     char hostname[10];
     int fd1,fd2;
@@ -103,11 +128,11 @@ char *print_tishi(void)
     fd1= open("/tmp/host_name",O_RDONLY);
     read(fd1,name,10);
     close(fd2);
-    remove("/tmp/hostname");
+    remove("/tmp/host_name");
     for(i=0;name[i]!='\n';i++) ;
     name[i] = '\0';
     strcpy(U_name,name);
-    strcpy(re,"\e[35;1m");
+    strcpy(re,"\e[36;1m");
     strcat(re,name);
     strcat(re,"@");
     strcat(re,hostname);
@@ -117,9 +142,13 @@ char *print_tishi(void)
     } else {
     strcat(re," $ ");
     }
+	strcpy(re1,"\e[1;31m┌─╼[\e[0m\e[1;33m");
+	strcat(re1,getcwd(NULL,0));
+	strcat(re1,"\e[0m\e[1;31m]\n└╼\e[0m");
+	strcat(re1,re);
 //    printf("%s",re);
-    line = readline(re);
-    if(line!=NULL) {
+    line = readline(re1);
+    if(line!=NULL&&strlen(line)>0) {
         add_history(line);
     }
     return line;
@@ -269,7 +298,8 @@ void deal_input(char a[][22])
         i--;
         bk = 1;
     }
-    if(mode_num>1) {
+//    printf("%d\n",mode_num);
+    if(mode != 3 && mode_num>1) {
         puts("Too much symbol!");
         return;
     }
@@ -278,7 +308,7 @@ void deal_input(char a[][22])
     for(j=0;j<i;j++) {
         arg[j]=(char*)a[j];
     }
-    if(strcmp(arg[0],"ls") == 0) {
+    if(strcmp(arg[0],"ls") == 0 && mode == 0) {
         arg[i] = "--color=auto";
         i++;
     }
@@ -298,10 +328,25 @@ void deal_input(char a[][22])
             if(strcmp(arg[j],"|") == 0) {
                 arg[j] = NULL;
                 j++;
-                break;
+        //        break;
             }
         }
     }
+    int jj;
+    for(jj=0;;jj++) {
+        if(arg[jj]==NULL);
+        jj++;
+        break;
+    }
+    jj=jj+j;
+    j=jj-j;
+    jj=jj-j;
+//    printf("---%d\n",j);
+    for(jj=i-1;arg[j]!=NULL;j--) ;
+//    printf("JJJJJJJJJJJJJJJ=%d\n",jj);
+//    puts ("123");
+    int hh;
+//    for(hh=0;hh<10;hh++) puts(arg[hh]);
     pid = fork();
     if(pid<0) {
         printf("errpr\n");
@@ -332,42 +377,95 @@ void deal_input(char a[][22])
                 perror(arg[0]);
             }
         } else if(mode == 3) {
-            pid2=fork();
-            if(pid2==0) {
-                remove("/tmp/my_shell");
-                fd = open("/tmp/my_shell",O_RDWR|O_CREAT|O_TRUNC,0644);
-                dup2(fd,1);
-                if(execvp(arg[0],arg) == -1) {
-                    perror(arg[0]);
+            int nn=0;
+            for(nn=0;nn<mode_num;nn++) {
+                pid2=fork();
+                if(pid2==0) {
+                    if(nn == 0) {
+                    //    remove("/tmp/my_shell");
+                        fd = open("/tmp/my_shell",O_RDWR|O_CREAT|O_TRUNC,0644);
+                        dup2(fd,1);
+                        if(execvp(arg[0],arg) == -1) {
+                            perror(arg[0]);
+                        }
+                    } else {
+                        int fda,fdb;
+                        if(nn%2==1) {
+                            fda = open("/tmp/my_shell",O_RDONLY);
+                            fdb = open("/tmp/my_she",O_RDWR|O_CREAT|O_TRUNC,0644);
+                        } else {
+                            fda = open("/tmp/my_she",O_RDONLY);
+                            fdb = open("/tmp/my_shell",O_RDWR|O_CREAT|O_TRUNC,0644);
+                        }
+                        dup2(fda,0);
+                        dup2(fdb,1);
+                        int k=0;
+                        for(i=j;arg[i]!=NULL;i++) {
+                            k++;
+                        }
+                        char *arg2[k+1];
+                        printf("i==%d,j==%d\n",i,j);
+                        for(j,i=0;arg[j]!=NULL;j++) {
+                            printf("i=%d,j=%d\n",i,j);
+                            arg2[i]=arg[j];
+                            i++;
+                        }
+                        j++;
+                        arg2[k]=NULL;
+//                        puts("---------------");
+//                        for(k=0;arg2[k]!=NULL;k++) {
+//                            puts(arg2[k]);
+//                        }
+//                        puts("---------------");
+                        if(execvp(arg2[0],arg2) == -1) {
+                            perror(arg2[0]);
+                        }
+                    }
+                    exit(0);
                 }
-                exit(0);
-            }else if(pid2>0) {
-                wait(NULL);
-                fd = open("/tmp/my_shell",O_RDONLY);
-                dup2(fd,0);
-                int k=0;
-                for(i=j;arg[i]!=NULL;i++) {
-                    k++;
+                if(pid2>0) {
+                    wait(NULL);
+                    if(nn == mode_num-1) {
+//                        printf("J=====%d\n",j);
+                        if(nn%2==0) {
+                            fd = open("/tmp/my_shell",O_RDONLY);
+                        } else {
+                            fd = open("/tmp/my_she",O_RDONLY);
+//                            puts("my_she");
+                        }
+                        dup2(fd,0);
+            	        int k=0;
+           	            for(i=j;arg[i]!=NULL;i++) {
+            	        k++;
+           			     }
+        	        	char *arg2[k+1];
+	            	    for(j,i=0;arg[j]!=NULL;j++) {
+	                    arg2[i]=arg[j];
+	                    i++;
+		                }
+		                arg2[k]=NULL;
+		                if(execvp(arg2[0],arg2) == -1) {
+	                    perror(arg2[0]);
+		                }
+		                exit(0);
+                    } else {
+//                        printf("**j=%d\n",j);
+                        if(1) {
+                        for(j;arg[j]!=NULL;j++) ;
+                        }
+                        j++;
+                    }
                 }
-                char *arg2[k+1];
-                for(j,i=0;arg[j]!=NULL;j++) {
-                    arg2[i]=arg[j];
-                    i++;
-                }
-                arg2[k]=NULL;
-                if(execvp(arg2[0],arg2) == -1) {
-                    perror(arg2[0]);
-                }
-                exit(0);
             }
         }
         exit(0);
     }
 }
 
+
 void help(void)
 {
-    puts("welcome to us k-sh!\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\nfunction:\n    1.history:view input history\n    2.del history:delete input history\n    3.help:open help file\n    4.cd <path>:change work path\n        *cd ~:go to your home\n    5.tab:completion input\n    6.up & down:change last or next input\n    7.you can use > < | or &\n        >:Output redirection\n        <:Input redirection\n        |:Pipe symbol\n        &:Background\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\nif you have any question,you can contact me by e-mail!\ne-mail:1041984720@qq.com");
+    puts("welcome to us k-sh!\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\nfunction:\n    1.history:view input history\n    2.clean:delete input history\n    3.help:open help file\n    4.cd <path>:change work path\n        *cd ~:go to your home\n    5.tab:completion input\n    6.up & down:change last or next input\n    7.you can use > < | or &\n        >:Output redirection\n        <:Input redirection\n        |:Pipe symbol\n        &:Background\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\nif you have any question,you can contact me by e-mail!\ne-mail:1041984720@qq.com");
 
 }
 
